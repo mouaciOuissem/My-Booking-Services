@@ -1,0 +1,5 @@
+- name: Create Pipeline
+  hosts: managers
+  become: true
+  roles:
+    - gitlab-pipeline

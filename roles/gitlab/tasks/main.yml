@@ -1,0 +1,73 @@
+---
+- name: Importer la clé publique manquante
+  apt_key:
+    url: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
+    state: present
+
+- name: Apt update
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Installation des paquets système requis
+  ansible.builtin.apt:
+    name:
+      - python3-pip
+      - python3-gitlab
+    state: present
+  notify: update cache
+
+- name: Add or update entry in /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ Host }}"
+    state: present
+
+- name: Importer la clé GPG GitLab
+  apt_key:
+    url: https://packages.gitlab.com/gpg.key
+    state: present
+
+- name: Ajouter le référentiel GitLab
+  apt_repository:
+    repo: "deb https://packages.gitlab.com/gitlab/gitlab-ce/debian/ bookworm main"
+    state: present
+    filename: gitlab-ce
+
+- name: Apt update
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install GitLab
+  apt:
+    name: gitlab-ce
+    state: present
+  environment:
+    - EXTERNAL_URL: "{{ External_url }}"
+
+- name: Gitlab uri configuration
+  lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: "^external_url", line: "external_url '{{ External_url }}'" }
+    - {
+        regexp: "^registry_external_url",
+        line: "registry_external_url '{{ Registry_url }}'",
+      }
+
+- name: Configure GitLab
+  command: gitlab-ctl reconfigure
+
+- name: "Create GitLab User"
+  gitlab_user:
+    api_url: "{{ External_url }}"
+    validate_certs: True
+    api_username: "root"
+    api_password: "{{ lookup('file', 'gitlab-root-password.yml') }}"
+    name: "{{ item.name }}"
+    username: "{{ item.username }}"
+    password: "{{ item.password }}"
+    email: "{{ item.email }}"
+    access_level: owner
+  loop: "{{ Users }}"

@@ -1,0 +1,30 @@
+- name: Set Git user email
+  git_config:
+    scope: global
+    name: user.email
+    value: "{{ Git_mail }}"
+
+- name: Set Git user name
+  git_config:
+    scope: global
+    name: user.name
+    value: "{{ Git_username }}"
+
+- name: Clone GitLab repository
+  git:
+    repo: "http://{{ Git_username }}:{{ lookup('file', 'gitlab-user-password.yml') }}@{{ External_url }}clo5/{{ Project }}.git"
+    dest: "../clone-clo5"
+    clone: yes
+    force: yes
+
+- name: Copy .gitlab-ci.yml to repository
+  copy:
+    src: ".gitlab-ci.yml"
+    dest: "../clone-clo5/.gitlab-ci.yml"
+
+- name: Commit and push changes to Git
+  shell: |
+    cd ../clone-clo5
+    git add .gitlab-ci.yml
+    git commit -m "Push .gitlab-ci.yml"
+    git push origin main

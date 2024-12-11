@@ -1,0 +1,13 @@
+# ---
+- name: Deploy Docker Swarm and Registry
+  hosts: clo5
+  become: true
+  roles:
+    # - docker_swarm
+    - docker_registry
+
+- name: Deploy GitLab on the VM with the most RAM
+  hosts: managers
+  become: true
+  roles:
+    - gitlab

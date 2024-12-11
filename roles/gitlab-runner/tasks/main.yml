@@ -1,0 +1,123 @@
+- name: Add or update entry in /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ Host }}"
+    state: present
+  when: "'workers' in group_names"
+
+- name: Install Docker Compose
+  ansible.builtin.apt:
+    name: docker-compose
+    state: present
+  when: "'workers' in group_names"
+
+- name: Download and install GitLab Runner
+  shell: |
+    curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh | bash
+    apt-get install gitlab-runner -y
+
+- name: curl access token
+  shell: "curl --header 'PRIVATE-TOKEN: {{ Private_token }}' '{{External_url }}api/v4/personal_access_tokens?search={{ Access_token }}'"
+  register: token
+  changed_when: false
+  ignore_errors: true
+  when: "'managers' in group_names"
+
+- name: Create GitLab Personal Access Token
+  shell: >
+    gitlab-rails runner "token = User.find_by_username('root').personal_access_tokens.find_by_name({{ Access_token }}); if token.nil?; token = User.find_by_username('root').personal_access_tokens.create(scopes: ['api'], name: {{ Access_token }}, expires_at: 365.days.from_now); token.set_token({{ Private_token }}); token.save!; end"
+  when: 
+    - "'managers' in group_names"
+    - "Access_token not in token.stdout"
+
+- name: Set GitLab personal access token
+  set_fact:
+    gitlab_personal_access_token: "{{ token }}"
+  when: "'managers' in group_names"
+
+- name: Gitlab create groups
+  gitlab_group:
+    api_url: http://clo5-gitlab.com/
+    validate_certs: False
+    api_username: "root"
+    api_password: "{{ lookup('file', 'gitlab-root-password.yml') }}"
+    name: "{{ Group }}"
+    path: "{{ Group }}"
+    state: present
+  when: "'managers' in group_names"
+
+- name: Create GitLab Project in group Ansible
+  gitlab_project:
+    api_url: http://clo5-gitlab.com/
+    validate_certs: False
+    api_username: "root"
+    api_password: "{{ lookup('file', 'gitlab-root-password.yml') }}"
+    name: "{{ Project }}"
+    path: "{{ Group }}"
+    issues_enabled: False
+    wiki_enabled: True
+    snippets_enabled: True
+    state: present
+  when: "'managers' in group_names"
+
+- name: Get Project id
+  ansible.builtin.shell: |
+    curl -s GET \
+    -H "Accept: application/json" \
+    --header "PRIVATE-TOKEN: {{ Private_token }}" \
+    "{{ External_url }}api/v4/projects?name={{ Project }}" | grep -Po '"id":\d+' | head -1 | grep -Po '\d+'
+  register: project_id
+  when: "'managers' in group_names"
+
+- name: Get Users id
+  block:
+    - name: Get User ID
+      ansible.builtin.shell: |
+        curl -s GET \
+        -H "Accept: application/json" \
+        --header "PRIVATE-TOKEN: {{ Private_token }}" \
+        "{{ External_url }}api/v4/users?username={{ item.username }}" | grep -Po '"id":\d+' | head -1 | grep -Po '\d+'
+      register: user_id
+      loop: "{{ Users }}"
+      loop_control:
+        loop_var: item
+
+    - name: Set Access Level
+      ansible.builtin.shell: |
+        curl --request POST \
+        --header 'PRIVATE-TOKEN: {{ Private_token }}' \
+        --data 'user_id={{ item.stdout }}&access_level=50' \
+        '{{ External_url }}api/v4/projects/{{ project_id.stdout }}/members'
+      loop: "{{ user_id.results }}"
+      loop_control:
+        loop_var: item
+  when: "'managers' in group_names"
+  tags: always
+
+- name: Get GitLab Runner registration token
+  ansible.builtin.shell: |
+    curl -s GET \
+    -H "Accept: application/json" \
+    --header "PRIVATE-TOKEN: {{ Private_token }}" \
+    "{{ External_url }}api/v4/projects/1" | grep -Po '(?<="runners_token":")[^"]*' | cut -d '"' -f1
+  register: gitlab_runner_token
+
+- name: Register runner
+  ansible.builtin.shell: |
+    gitlab-runner --debug register \
+    --non-interactive \
+    --url "{{ External_url }}" \
+    --registration-token "{{ gitlab_runner_token.stdout }}" \
+    --executor "docker" \
+    --docker-image "docker:16.9.1" \
+    --docker-network-mode host \
+    --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
+    --description "{{ inventory_hostname }}" \
+    --run-untagged="true" \
+    --locked="false" \
+    --access-level="ref_protected"
+  when: "'workers' in group_names"
+
+- name: Restart gitlab-runner
+  command: sudo gitlab-runner restart
+  when: "'workers' in group_names"

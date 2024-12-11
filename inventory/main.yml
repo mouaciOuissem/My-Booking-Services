@@ -1,0 +1,26 @@
+all:
+  children:
+    clo5:
+      hosts:
+        VM1:
+          ansible_host: 172.16.237.16
+        VM2:
+          ansible_host: 172.16.237.111
+        VM3:
+          ansible_host: 172.16.237.131
+    managers:
+      hosts:
+        VM1:
+          ansible_host: 172.16.237.16
+    workers:
+      hosts:
+        VM2:
+          ansible_host: 172.16.237.111
+        VM3:
+          ansible_host: 172.16.237.131
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_user: platev_a
+
+defaults:
+  enable_task_debugger: True

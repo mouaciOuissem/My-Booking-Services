@@ -1,0 +1,7 @@
+Access_token: "test2"
+Private_token: "coucou2"
+External_url: "clo5-gitlab.com/"
+Registry_url: "http://clo5-gitlab.com:5000"
+Project: "clo5_project"
+Git_mail: "dudon_t@etna-alternance.net"
+Git_username: "doudon_t"

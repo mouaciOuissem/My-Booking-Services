@@ -1,0 +1,54 @@
+---
+- name: Apt update
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
+
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg2
+      - python3-docker
+      - software-properties-common
+      - lsb-release
+    state: present
+  become: yes
+
+- name: Add Docker’s official GPG key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+  become: yes
+
+- name: Set up the stable repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+    state: present
+  become: yes
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    name: docker-ce
+    state: present
+  become: yes
+
+- name: Initialize Docker Swarm on Manager Node
+  ansible.builtin.shell: docker swarm init --advertise-addr {{ ansible_host }}
+  become: yes
+  when: "'managers' in group_names"
+  run_once: true
+
+- name: Get Docker Swarm join-token for Workers
+  ansible.builtin.shell: docker swarm join-token worker -q
+  become: yes
+  when: inventory_hostname == groups['managers'][0]
+  register: swarm_worker_token
+  run_once: true
+
+- name: Join Swarm as a Worker Node
+  ansible.builtin.shell: docker swarm join --token {{ hostvars[groups['managers'][0]]['swarm_worker_token'].stdout }} {{ hostvars[groups['managers'][0]]['ansible_host'] }}:2377
+  become: yes
+  when: "'workers' in group_names"

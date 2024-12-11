@@ -1,0 +1,11 @@
+---
+# handlers file for roles/prometheus
+- name: restart_prometheus
+  service:
+    name: prometheus
+    state: restarted
+
+- name: reload_prometheus
+  service:
+    name: prometheus
+    state: reloaded

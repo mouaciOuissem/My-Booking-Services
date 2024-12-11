@@ -1,0 +1,12 @@
+- name: install node exporter
+  hosts: clo5
+  become: yes
+  roles:
+    # - node_exporter
+
+- name: install prometheus/grafana
+  hosts: managers
+  become: yes
+  roles:
+    # - prometheus
+    - grafana

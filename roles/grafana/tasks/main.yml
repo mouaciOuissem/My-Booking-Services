@@ -1,0 +1,86 @@
+---
+# tasks file for roles/grafana
+# - name: Ensure wget and dpkg are installed
+#   ansible.builtin.apt:
+#     name:
+#       - wget
+#       - dpkg
+#     state: present
+#     update_cache: yes
+# - name: Install required dependencies for Grafana
+#   ansible.builtin.apt:
+#     name:
+#       - libfontconfig1
+#       - musl
+#     state: present
+#     update_cache: yes
+
+# - name: Download .deb package
+#   ansible.builtin.get_url:
+#     url: "{{ deb_package_url }}"
+#     dest: "{{ deb_package_local_path }}"
+#     mode: "0644"
+
+# - name: Install .deb package
+#   ansible.builtin.shell:
+#     cmd: dpkg -i "{{ deb_package_local_path }}"
+#   become: yes
+
+- name: Clean up downloaded .deb package
+  ansible.builtin.file:
+    path: "{{ deb_package_local_path }}"
+    state: absent
+
+- name: change admin user
+  lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: "{{ item.before }}"
+    line: "{{ item.after }}"
+  with_items:
+    - {
+        before: "^;admin_user = admin",
+        after: "admin_user = {{ grafana_admin_user }}",
+      }
+    - {
+        before: "^;admin_password = admin",
+        after: "admin_password = {{ grafana_admin_password }}",
+      }
+
+- name: start service grafana-server
+  systemd:
+    name: grafana-server
+    state: started
+    enabled: yes
+
+# - name: wait for service up
+#   uri:
+#     url: "http://127.0.0.1:3030"
+#     status_code: 200
+#   register: __result
+#   until: __result.status == 200
+#   retries: 120
+#   delay: 1
+
+- name: add prometheus datasource
+  grafana_datasource:
+    name: "prometheus-local"
+    grafana_url: "http://172.16.237.16:3030"
+    grafana_user: "{{ grafana_admin_user }}"
+    grafana_password: "{{ grafana_admin_password }}"
+    org_id: "1"
+    ds_type: "prometheus"
+    ds_url: "http://172.16.237.16:9091"
+  changed_when: false
+
+- name: install node exporter dashboard
+  get_url:
+    url: https://raw.githubusercontent.com/rfrail3/grafana-dashboards/master/prometheus/node-exporter-full.json
+    dest: /var/lib/grafana/node-exporter.json
+    mode: "0755"
+
+- name: activate dashboard for node exporter
+  template:
+    src: dashboard-node-exporter.yml.j2
+    dest: /etc/grafana/provisioning/dashboards/dashboard-node-exporter.yml
+    mode: 0755
+  notify: restart_grafana

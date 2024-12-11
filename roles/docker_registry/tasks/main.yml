@@ -1,0 +1,17 @@
+- name: Install Docker Registry on a designated node
+  ansible.builtin.docker_container:
+    name: registry
+    image: registry:2
+    ports:
+      - "5050:5000"
+    volumes:
+      - "/opt/registry/data:/var/lib/registry"
+    restart_policy: always
+  when: inventory_hostname == groups['managers'][0]
+
+- name: Redémarrer le service Docker Registry
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  become: yes
+  when: inventory_hostname == groups['managers'][0]

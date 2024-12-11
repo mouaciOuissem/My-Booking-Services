@@ -1,0 +1,6 @@
+---
+# defaults file for roles/grafana
+grafana_admin_user: "admin"
+grafana_admin_password: "P@ssw0rd"
+deb_package_url: "https://dl.grafana.com/oss/release/grafana_10.4.1_amd64.deb"
+deb_package_local_path: "/tmp/grafana_10.4.1_amd64.deb"
